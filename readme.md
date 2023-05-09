@@ -1,6 +1,12 @@
 # express-mongo-login
-
 a easy and secure way to manage your user data with express and mongoose.
+
+### install 
+
+```cmd
+npm i express-mongo-login
+```
+
 ## how the authentication works :
 
  First the user will log in, this will set a session or a cookie depending on the remember option.
