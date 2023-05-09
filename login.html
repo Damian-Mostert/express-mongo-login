@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html>
+  <body>
+    <h1>Login Example</h1>
+    <br><input id="EmailOrUsername">
+    <br><input id="Password">
+    <br>rememberMe<input type="checkbox" id="remember">
+    <br><button onclick="login(document.getElementById('EmailOrUsername').value,document.getElementById('Password').value,document.getElementById('remember').checked)">Submit</button>
+  </body>
+</html>
+<script>
+async function login(EmailOrUsername,Password,remember){
+  const response = await fetch("/basic-login", {
+    method: "POST",
+    mode: "cors",
+    cache: "no-cache",
+    credentials: "same-origin",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    headers: {"Content-Type": "application/json",},
+    body: JSON.stringify({EmailOrUsername,Password,remember}),
+  });
+  const jsonData = await response.json();console.log(jsonData);if(jsonData.success)window.location.href="/"
+}
+</script>
