@@ -354,26 +354,42 @@ function expressMongooseLogin(model={},config={}){
       return error({password:true})
     }
     //function to reAuthenticate, change encryption, fake tokens and auth tokens
-    async function reAuthenticate() {
-      //authenticate users
-      const auth = await authenticate();
-      //if authenticate error return error
-      if (auth.error)return auth;
-      //set input
+   async function reAuthenticate() {
+      const authResult = await authenticate();
+      if (authResult.error) return authResult;
+      const authUsers = authResult.success;
       const input = {};
-      //logout of all users with logoutNoAuth since request is already authenticated
-      for(let i = 0;i<auth.success.length;i++)logoutNoAuth(0)
-      //for each user in success
-      for (const user of auth.success){
-        //set input keys
+      const sessionUsers = [];
+      const cookieUsers = [];
+      const sessionLength = function(){
+        if(request.session[config.cookieName ])return request.session[config.cookieName ].length
+        return 0
+      }();
+      for(let i = 0;i<authUsers.length;i++)logoutNoAuth(0)
+      for (const user of authUsers) {
         for (const key of authfindArray)
-          input[key] = user[key];
-        if ((await login(input)).error)
-          //login, if error return error
-          return error({ login: (sessionUsers.length < request.session[config.cookieName ].length) })
-      }
-      return success();
-    }
+                input[key] = user[key];
+            if (sessionUsers.length < sessionLength)
+              sessionUsers.push(user);
+            else
+              cookieUsers.push(user);
+          }
+          for (const user of sessionUsers) {
+            for (const key of authfindArray)
+              input[key] = user[key];
+            const loginResult = await login(input);
+            if (loginResult.error)
+              return error({ login: true });
+          }
+          for (const user of cookieUsers) {
+            for (const key of authfindArray)
+              input[key] = user[key];
+            const loginResult = await login(input, { remember: true });
+            if (loginResult.error)
+              return error({ login: true });
+          }
+          return success();
+        }
     //function to logout user at index
     async function logout(x){
       //authenticate users
