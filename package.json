@@ -4,10 +4,11 @@
     "crypto-js": "^4.1.1",
     "express": "^4.18.2",
     "express-session": "^1.17.3",
-    "mongoose": "^6.1.5"
+    "mongoose": "^6.1.5",
+    "socket.io": "^4.6.1"
   },
   "name": "express-mongo-login",
-  "version": "1.0.9",
+  "version": "1.0.20",
   "main": "index.js",
   "scripts": {
     "test": "node test"
@@ -15,11 +16,19 @@
   "author": "Damain Mostert",
   "license": "ISC",
   "description": "a easy way and secure way to handle user data with mongoose and express",
-  "keywords":[
-	"mongoose",
-  	"mongo",
-  	"express",
-  	"login",
-  	"server"
-  ]
+  "keywords": [
+    "mongoose",
+    "mongo",
+    "express",
+    "login",
+    "server"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Damian-Mostert/express-mongo-login.git"
+  },
+  "bugs": {
+    "url": "https://github.com/Damian-Mostert/express-mongo-login/issues"
+  },
+  "homepage": "https://github.com/Damian-Mostert/express-mongo-login#readme"
 }

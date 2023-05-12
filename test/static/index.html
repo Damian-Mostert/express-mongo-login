@@ -1,0 +1,127 @@
+<style media="screen">
+  html{
+    background:#000;
+    color:#fff;
+    font-family:monospace
+  }
+</style>
+<h1>please use the console to test the functions</h1>
+&bull; Windows/Linux: Press Control + Shift + K
+<br>
+<br>&bull; Mac: Press Command + Option + K
+<br>
+<br><a target="_blank" href="https://www.npmjs.com/package/express-mongo-login?activeTab=readme">read manual</a>
+<script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
+<script type="text/javascript">
+  var socket = io();
+  var onAuthArray = []
+  onAuth = callback =>{
+    onAuthArray.push(callback)
+  }
+  socket.on("authenticated",auth=>{for(callback of onAuthArray)callback(auth)})
+  socket.emit('authenticate')
+  async function logout(x){
+    const response = await fetch("/logout", {
+        method: "POST",
+        mode: "cors",
+        cache: "no-cache",
+        credentials: "same-origin",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({x}),
+      });
+      var res = await response.json()
+      if(res.success)window.location.href=window.location.href
+      return res
+  }
+  async function logoutAll(){
+    const response = await fetch("/logoutAll", {
+        method: "POST",
+        mode: "cors",
+        cache: "no-cache",
+        credentials: "same-origin",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body:'{}',
+      });
+      var res = await response.json()
+      if(res.success)window.location.href=window.location.href
+      return res
+  }
+  async function login(auth,config){
+    const response = await fetch("/login", {
+        method: "POST",
+        mode: "cors",
+        cache: "no-cache",
+        credentials: "same-origin",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({auth,config}),
+      });
+      var res = await response.json()
+      if(res.success)window.location.href=window.location.href
+      return res
+  }
+  async function generateOTP(auth,config){
+    const response = await fetch("/login/otp/generate", {
+        method: "POST",
+        mode: "cors",
+        cache: "no-cache",
+        credentials: "same-origin",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({auth,config}),
+      });
+      return await response.json()
+  }
+  async function loginWithOTP(browser_key,user_key){
+    const response = await fetch("/login/otp", {
+        method: "POST",
+        mode: "cors",
+        cache: "no-cache",
+        credentials: "same-origin",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({browser_key,user_key}),
+      });
+      var res = await response.json()
+      if(res.success)window.location.href=window.location.href
+      return res
+  }
+  async function reAuthenticate(){
+    const response = await fetch("/re-auth", {
+        method: "POST",
+        mode: "cors",
+        cache: "no-cache",
+        credentials: "same-origin",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body:'{}',
+      });
+      var res = await response.json()
+      if(res.success)window.location.href=window.location.href
+      return res
+  }
+  async function signup(auth,config){
+    const response = await fetch("/signup", {
+        method: "POST",
+        mode: "cors",
+        cache: "no-cache",
+        credentials: "same-origin",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({auth,config}),
+      });
+      return await response.json()
+  }
+  onAuth(auth=>{
+    console.info('auth',auth)
+  })
+</script>

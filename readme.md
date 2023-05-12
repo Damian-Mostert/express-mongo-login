@@ -1,12 +1,8 @@
+
+
 # express-mongo-login
+
 a easy and secure way to manage your user data with express and mongoose.
-
-### install 
-
-```cmd
-npm i express-mongo-login
-```
-
 ## how the authentication works :
 
  First the user will log in, this will set a session or a cookie depending on the remember option.
@@ -46,13 +42,11 @@ const userRout = expressMongoLogin(userModel,{
 //use in app
 app.use(userRout)
 //use in io
-io.use((socket,next)=>{
-	userRout(socket.request,{},next)
-})
+io.use(userRout.io()) // enables socket.request.mongo['cookie name'].authenticate()
 ```
-you can now use socket.request to authenticate users, but not to login or logout.
+you can now use socket.request to authenticate users, but not to login or logout or to reAuthenticate.
 
-### using this will enable the following :
+### using express-mongo-login rout on server will enable the following :
 #### &bull; req.mongo[].authenticate(used to authenticate user and get user data)
 USAGE
 ```js
@@ -65,15 +59,15 @@ else if(Auth.success)
 ERRORS
 ```js
 //no cookie or session set yet
-{error:{noCookie:true}}
+{error:{cookie:true}}
 ```
 ```js
-//Santax error with cookie, cookie auto deletes
-{error:{Santax:true}}
+//Santax error with cookie, cookie auto deletes when this error has ret
+{error:{santax:true}}
 ```
 ```js
-//authentication error, cookie auto deletes
-{error:{Auth:true}}
+//authentication error, cookie auto deletes when this error has ret
+{error:{auth:true}}
 ```
 #### &bull; res.mongo[].reAuthenticate (used to change authtokens and encryption)
 USAGE
@@ -84,7 +78,7 @@ if(Auth.success)
 else //handle error
 ```
 ERRORS
-<br> !note all auth and login erros apply
+<br> note! all auth and login erros apply
 #### &bull; res.mongo[].login (used to log user in)
 USAGE
 ```js
@@ -92,6 +86,9 @@ let LoginAuth = await res.mongo["your cookie name"].login({
   //credentials
 },{
   remember:true//if remember me it will use a cookie, if false or null, it will use session
+  dontSanatize:true//if true it wont sanatize input, use with cuation
+
+  dontLockon:true//if true will disable lockon, use with cuation
 })
 if(LoginAuth.error)
   //handle error
@@ -101,7 +98,15 @@ else if(LoginAuth.success){
 }
 ```
 ERRORS
-<br> !note all auth erros apply
+<br> note! all auth erros apply
+```js
+//account locked becuase of lockon
+{error:{locked:{attempts:/*amount of invalid attempts*/,timeleft:/*amoutn of time left*/}}}
+```
+```js
+//bad input characters
+{error:{input:true}}
+```
 ```js
 //user does not exist
 {error:{user:true}}
@@ -112,8 +117,46 @@ ERRORS
 ```
 ```js
 //user has already been loged in on this device
-{error:{overlogin:true}}
+{error:{users:true}}
 ```
+#### &bull; res.mongo[].generateOTP (used to generate OTP for login, only avalable if otp is set in config)
+USAGE
+```js
+let otpRes = await res.mongo["your cookie name"].generateOTP(/*login input 1*/,{
+//same as login input but
+authenticate:true // if set to true authWith details will be autofilled,
+//so the user will need a password if null undefined or false, and wont need one if true
+//this can be used for login, password recovery or confirming a users account after signup
+//you can use dontLockon to skip bypass locked acounts
+})
+if(otpRes.success)
+	var key = otpRes.success.key //important, this key must be sent to browser
+else
+//handle error
+```
+note! only one OTP is available per user
+<br>
+ERRORS
+<br> note! all auth and login errors apply
+#### &bull; res.mongo[].loginWithOTP (used to log user in with OTP, only avalable if otp is set in config)
+USAGE
+```js
+let loginRes = await res.mongo["your cookie name"].loginWithOtp(/*key sent to browser*/,/*key sent to callback*/)
+if(loginRes.success){
+	//user is loged in
+}else{
+	//otp failed
+}
+```
+ERRORS
+<br> note! all auth and login erros apply
+```js
+{key:true}//browser key is bad
+```
+```js
+{password:true}//ont time password is bad
+```
+
 #### &bull; res.mongo[].logout (used to log user out)
 USAGE
 ```js
@@ -122,136 +165,248 @@ let LogoutAuth = await res.mongo["your cookie name"].logout(userIndex)
 //returns {success:{cookie:true,CookieIndex:Number(x),clearedToken:cookie[x]}} if cookie loged out
 ```
 ERRORS
-<br> !note all auth erros apply
+<br> note! all auth erros apply
 ```js
-{error:{noUserAtIndex:true}}
+//no user at index
+{error:{index:true}}
 ```
-#### MORE ACTIONS COMMING SOON...
-## Working Example
+## using with lockon
 
+lockon blockes users from loging in after failed attemts
+```js
+const login = expressMongoLogin(userModel,{
+  //lockon config
+  lockon:{
+      5:{//on 5 attempts
+        timeout:1000*60,
+        callback:id=>{
+          console.log("user "+id+" locked out for 1 minute")
+        },
+      },
+      6:{//on 6 bad attempts
+        timeout:1000*60*3,
+        callback:id=>{
+          //callback with id, you can use this to notify users of bad activity
+          console.log("user "+id+" locked out for 3 minute")
+        },
+      }
+  },
+})
+```
+## Experimental example
+note! some customization might be needed
 app.js
 ```js
-//import mongoose
 const mongoose = require("mongoose")
-//import express
 const express = require("express")
-//import express-mongo-login
-const expressMongoLogin = require("./")
-//connect to mongodb
+const expressMongoLogin = require("../")
 mongoose.connect("mongodb://localhost/test2")
-//create user model
 const userModel = new mongoose.model("Users", new mongoose.Schema({
   Username: String,
   Email: String,
   Password: String,
 },{autoCreate: false,autoIndex: false}))
-
-//toggle and edit if you want to create a user
-//let main=async ()=>{console.log(await userModel.create({Username:"Damian",Email:"damianmostert86@gmail.com",Password:"1234",}))};main()
-
-//create server
 const app = express()
 const http = require('http');
 const server = http.createServer(app);
-//make socket io server
 const { Server } = require("socket.io");
 const io = new Server(server)
-
-//listen
 server.listen(3000)
-
-//make cookie secret
-
 const CookieSecret = "BABA BLACK SHEEP"
-const userRout= expressMongoLogin(userModel,{
-  cookieName:"Users",
-  findWith:"Email,Username",
-  authWith:"Password",
-  authTimeout:1000*60*60*12,//12 hrs timout
+const login = expressMongoLogin(userModel,{
   secret:CookieSecret,
   cookie:{
-    maxAge:1000*60*60*12,//12 hrs timout
+    'Same Site':"strict",
+    maxAge:1000*60*60*12*7
   },
   Session:{
     secret:CookieSecret,
     cookie:{
-        maxAge:1000*60*60*12,//12 hrs timout
-     },
+      'Same Site':"strict",
+      maxAge:1000*60*60
+    },
+  },
+  cookieName:"Users",
+  findWith:"Email,Username",
+  authWith:"Password",
+  authTimeout:1000*60*60*12,
+  otp:{
+    length:8,
+    timeout:1000*60*5,
+    callback:async(user,password)=>{
+      console.log(password)
+    }
+  },
+  lockon:{
+      5:{
+        timeout:1000*60,
+        callback:id=>{
+          console.log("user "+id+" locked")
+        },
+      },
+      6:{
+        timeout:1000*60*3,
+        callback:id=>{
+          console.log("user "+id+" locked")
+        },
+      }
   },
 })
-app.use(express.json())//for req.body
-//make express use rout
-app.use(userRout)
-//enable auth on socket
-io.use((socket,next)=>{
-	userRout(socket.request,{},next)
-})
-
+app.use(login)
+io.use(login.io())
+app.use(express.json())
+app.use(express.static(__dirname+'/static'))
 io.on('connection',async socket=>{
-  console.log("a user connected")
-  console.log(await socket.request.mongo.Users.authenticate())
+  socket.on('authenticate',async()=>{
+    socket.emit("authenticated",await socket.request.mongo.Users.authenticate())
+  })
 })
-
-
-app.get("/",async(req,res)=>{
-  let auth = await req.mongo.Users.authenticate()
-  if(auth.error){
-    res.send("<a href='/login'>Go to login</a>")
-  }else{
-    res.send(`
-      <script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
-      <script>
-        var socket = io();
-      </script>
-      you are loged in
-      `)
-  }
+app.post("/re-auth",async (req,res)=>{
+ res.json(await res.mongo.Users.reAuthenticate())
 })
-app.get("/login",async (req,res)=>{
-  res.sendFile(__dirname+"/login.html")
+app.post("/login",async (req,res)=>{
+ res.json(await res.mongo.Users.login(req.body.auth,req.body.config))
 })
-app.post("/basic-login",async (req,res)=>{
- res.json(await res.mongo.Users.login({
-   Email:req.body.EmailOrUsername,
-   Username:req.body.EmailOrUsername,
-   Password:req.body.Password
- },{
-   remember:req.body.remember
- }))
+app.post("/login/otp/generate",async (req,res)=>{
+ res.json(await res.mongo.Users.generateOTP(req.body.auth,req.body.config))
 })
-app.get("/logout",async (req,res)=>{
-  res.json(await res.mongo.Users.logout(req.query.u))
+app.post("/login/otp/",async (req,res)=>{
+  res.json(await res.mongo.Users.loginWithOTP(req.body.browser_key,req.body.user_key))
 })
-app.post("/signup",(req,res)=>{
-  //make new user over here
+app.post("/logout",async (req,res)=>{
+  res.json(await res.mongo.Users.logout(req.body.x))
 })
-
+app.post("/logoutAll",async (req,res)=>{
+  res.json(await res.mongo.Users.logoutAll())
+})
 ```
-login.html
+static/index.html
 ```html
-<!DOCTYPE html>
-<html>
-  <body>
-    <h1>Login Example</h1>
-    <br><input id="EmailOrUsername">
-    <br><input id="Password">
-    <br>rememberMe<input type="checkbox" id="remember">
-    <br><button onclick="login(document.getElementById('EmailOrUsername').value,document.getElementById('Password').value,document.getElementById('remember').checked)">Submit</button>
-  </body>
-</html>
-<script>
-async function login(EmailOrUsername,Password,remember){
-  const response = await fetch("/basic-login", {
-    method: "POST",
-    mode: "cors",
-    cache: "no-cache",
-    credentials: "same-origin",
-    headers: {
-      "Content-Type": "application/json",
-    },
-    headers: {"Content-Type": "application/json",},
-    body: JSON.stringify({EmailOrUsername,Password,remember}),
-  });
-  const jsonData = await response.json();console.log(jsonData);if(jsonData.success)window.location.href="/"
-}
+<style media="screen">
+  html{
+    background:#000;
+    color:#fff;
+    font-family:monospace
+  }
+</style>
+<h1>please use the console to test the functions</h1>
+&bull; Windows/Linux: Press Control + Shift + K
+<br>
+<br>&bull; Mac: Press Command + Option + K
+<br>
+<br><a target="_blank" href="https://www.npmjs.com/package/express-mongo-login?activeTab=readme">read manual</a>
+<script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
+<script type="text/javascript">
+  var socket = io();
+  var onAuthArray = []
+  onAuth = callback =>{
+    onAuthArray.push(callback)
+  }
+  socket.on("authenticated",auth=>{for(callback of onAuthArray)callback(auth)})
+  socket.emit('authenticate')
+  async function logout(x){
+    const response = await fetch("/logout", {
+        method: "POST",
+        mode: "cors",
+        cache: "no-cache",
+        credentials: "same-origin",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({x}),
+      });
+      var res = await response.json()
+      if(res.success)window.location.href=window.location.href
+      return res
+  }
+  async function logoutAll(){
+    const response = await fetch("/logoutAll", {
+        method: "POST",
+        mode: "cors",
+        cache: "no-cache",
+        credentials: "same-origin",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body:'{}',
+      });
+      var res = await response.json()
+      if(res.success)window.location.href=window.location.href
+      return res
+  }
+  async function login(auth,config){
+    const response = await fetch("/login", {
+        method: "POST",
+        mode: "cors",
+        cache: "no-cache",
+        credentials: "same-origin",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({auth,config}),
+      });
+      var res = await response.json()
+      if(res.success)window.location.href=window.location.href
+      return res
+  }
+  async function generateOTP(auth,config){
+    const response = await fetch("/login/otp/generate", {
+        method: "POST",
+        mode: "cors",
+        cache: "no-cache",
+        credentials: "same-origin",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({auth,config}),
+      });
+      return await response.json()
+  }
+  async function loginWithOTP(browser_key,user_key){
+    const response = await fetch("/login/otp", {
+        method: "POST",
+        mode: "cors",
+        cache: "no-cache",
+        credentials: "same-origin",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({browser_key,user_key}),
+      });
+      var res = await response.json()
+      if(res.success)window.location.href=window.location.href
+      return res
+  }
+  async function reAuthenticate(){
+    const response = await fetch("/re-auth", {
+        method: "POST",
+        mode: "cors",
+        cache: "no-cache",
+        credentials: "same-origin",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body:'{}',
+      });
+      var res = await response.json()
+      if(res.success)window.location.href=window.location.href
+      return res
+  }
+  async function signup(auth,config){
+    const response = await fetch("/signup", {
+        method: "POST",
+        mode: "cors",
+        cache: "no-cache",
+        credentials: "same-origin",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({auth,config}),
+      });
+      return await response.json()
+  }
+  onAuth(auth=>{
+    console.info('auth',auth)
+  })
 </script>
+```
