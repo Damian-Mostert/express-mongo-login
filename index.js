@@ -12,17 +12,7 @@ const CryptoJS = require("crypto-js"); // to enctypt and decrypt data
 const Session = require("express-session") // for router session
 const cookieParser = require("cookie-parser") // for router cookies
 //function to generate random strings
-function generateString(length) {
-  //characters for random string
-  const characters ='ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
-  //set result variabal
-  let result = '';
-  for ( let i = 0; i < length; i++ )
-    result += characters.charAt(Math.floor(Math.random() * characters.length));
-    //add random character to result
-  return result;
-}
-let generateStringOg = generateString
+var generateString = require('./generateString.js')
 //function to encrypt JSON
 function encryptJSON(message,key){
   try{
@@ -56,26 +46,7 @@ const w = message => {
 }
 const throwErrors = (s) =>{
   for(let error of e_errors)console.error(error)
-  if(!s)s=`
-................................................................................................................
-expressMongoLogin(/*mongoose model*/,{
-cookieName:/*name of cookie and session, used as req.mongo[cookieName] or res.mongo[cookieName]*/,
-findWith:/*used to find users example "email,username" will look for both email and username*/,
-authWith:/*used to check user password, example "password" will look for password, you can use a comma to authenticate with multiple things*/,
-/*!note only one item has to match for the authentication to pass*/
-authTimeout:/*used to set auth token timeout*/,
-otp:{//for one time password
-  characters:"",//allowed characters
-  length:"",//length
-  timeout:"",//timeout
-},
-secret:/*cookie secret*/,
-cookie:{/*cookie config*/},
-Session:{/*session config*/},
-})
-\`\`\`\`\`\`\`\`\`\`\`\`\`\`\`\`\`\`\`\`\`\`\`\`\`\`\`\`\`\`\`\`\`\`\`\`\`\`\`\`\`\`\`\`\`\`\`\`\`\`\`\`\`\`\`\`\`\`\`\`\`\`\`\`\`\`\`\`\`\`\`\`\`\`\`\`\`\`\`\`\`\`\`\`\`\`\`\`\`\`\`\`\`\`\`\`\`\`\`\`\`\`\`\`\`\`\`\`\`\``
   if(e_errors.length){
-    inf("\n\033[1mfunction input was seposed to look something like this : \033[0m"+s)
     w("cought errors; calling process exit")
     process.exit(0)
   }
@@ -226,18 +197,10 @@ class onLockStorage{
 class OtpStorage{
   constructor(config){
     var storage = {}
-    function generateString(length,characters) {
-      //set result variabal
-      let result = '';
-      for ( let i = 0; i < length; i++ )
-        result += characters.charAt(Math.floor(Math.random() * characters.length));
-        //add random character to result
-      return result;
-    }
     let len = 20
     let itr = 0
     this.newKey=()=>{
-      let id = generateStringOg(len)
+      let id = generateString(len)
       if(storage[id]){
         itr++
         if(itr == 10){
@@ -295,7 +258,7 @@ module.exports =
 //express mongoose function input
 function expressMongooseLogin(model={},config={}){
   //config checking
-  if(!model||!(model.prototype instanceof mongoose.Model))//if model is not mongoose model
+  if(!model)//if model is not mongoose model
     e("No mongoose model")
   if(!config.cookieName)//if no cookie name throw error
     e("No cookieName set, expected a string")
@@ -332,7 +295,7 @@ function expressMongooseLogin(model={},config={}){
   if(typeof config.lockon[i]!="object")e("lockon['"+i+"'] was expecting a object")
   else {
     if((!config.lockon[i].timeout)||(typeof config.lockon[i].timeout !="number"))e("lockon['"+i+"'].timeout is not a number")
-    if((!config.lockon[i].callback)||(typeof config.lockon[i].callback!="function"))w("lockon['"+i+"'].callback is not a function; you would mabey like to use callback to warn users via email or phone")
+    if((config.lockon[i].callback)&&(typeof config.lockon[i].callback!="function"))w("lockon['"+i+"'].callback is not a function; you would mabey like to use callback to warn users via email or phone")
   }
   }
   if(config.otp){
@@ -341,6 +304,7 @@ function expressMongooseLogin(model={},config={}){
       if(config.otp.characters)if(typeof config.otp.characters != "string")e("otp.characters in config is not a string")
       if(typeof config.otp.length != "number")e("otp.length in config is not a number")
       if(typeof config.otp.timeout != "number")e("otp.timeout in config is not a number")
+      if(((typeof config.otp.callback!="function")))e("otp.callback in config is not a funtion")
     }else e("otp in config is not a object")
   }
   throwErrors(' ')
@@ -550,7 +514,6 @@ function expressMongooseLogin(model={},config={}){
       if(!loginConfig.dontSanatize)
       for(let string in start_input)
           if(!authAndFindWithArray.includes(string))return error({input:true})
-
       if(loginConfig.dontSanatize)input = start_input
       //find user with findWith
       for(let i of findWithArray)
@@ -581,6 +544,7 @@ function expressMongooseLogin(model={},config={}){
       //auth to check for other users
       const auth = await authenticate()
       if(auth.error)clearThisCookie()
+      if(config.maxUsers&&auth.success&&config.maxUsers == auth.success.length)return error({maxUsers:true})
       //for each in authWith array
       for(let i of authWithArray)
       //if user password match input password
@@ -595,8 +559,10 @@ function expressMongooseLogin(model={},config={}){
         //if no session build session
         if(!request.session[config.cookieName+"_session"])request.session[config.cookieName+"_session"]=[]
         //if remember
-        if(loginConfig.remember)response.setCookie(config.cookieName,[...request.cookies[config.cookieName],new newCookie()],config.cookie)
-        else request.session[config.cookieName+"_session"] = [...request.session[config.cookieName+"_session"],new newCookie()]
+        if(loginConfig.remember)
+          response.setCookie(config.cookieName,[...request.cookies[config.cookieName],new newCookie()],config.cookie)
+        else
+          request.session[config.cookieName+"_session"] = [...request.session[config.cookieName+"_session"],new newCookie()]
         //clear lock on status
         if(config.lockon&&!loginConfig.dontLockon){
           LockStorage.clearFailStatus(user._id)
@@ -636,14 +602,13 @@ function expressMongooseLogin(model={},config={}){
       var sessionCount = 0;
       //generate session length
       var sessionLength = 0
-      if(request.session[config.cookieName ])sessionLength = request.session[config.cookieName ].length
+      if(request.session[config.cookieName+"_session"])sessionLength = request.session[config.cookieName+"_session" ].length
       //logout of all users, no auth
-      for(let i = 0;i<auth.success.length;i++)
-        if(logoutNoAuth(0).error)
-          return error({logout:true})
+      if((await logoutAll()).error)
+        return error({logout:true})
       //for each user in success
       for (const user of auth.success) {
-        //clear input
+        //clear/set input
         input = {}
         //set input to match user
         for (const key of authAndFindWithArray)input[key] = user[key];
@@ -686,9 +651,8 @@ function expressMongooseLogin(model={},config={}){
         return auth;
       //for each user
       for(let i=0;i<auth.success.length;i++)
-        //logout with no auth at i index
-        if(await (logoutNoAuth(i)).error)
-          return error()
+          if((await logoutNoAuth(0)).error)
+            return error()
       return success()
     }
     //build mongo in request and response if it doesnt exist
@@ -728,3 +692,4 @@ function expressMongooseLogin(model={},config={}){
   //return rout
   return rout
 }
+module.exports.tools = require('./tools.js')

@@ -13,6 +13,7 @@ a easy and secure way to manage your user data with express and mongoose.
 ```js
                                       //database model
 app.use(expressMongoLogin(userModel,{
+  maxUsers:null,//0,null or undefined for infinite users, number bigger than 0 to define max users
   cookieName:"Users",//required, sets cookie and session name
   findWith:"Email,Username",//finds user with data
   authWith:"Password",//authenticates user with data
@@ -28,6 +29,7 @@ app.use(expressMongoLogin(userModel,{
 ### with socket.io
 ```js
 const userRout = expressMongoLogin(userModel,{
+  maxUsers:5,//max users set to 5, no more than 5 users will be allowed to login
   cookieName:"Users",//required, sets cookie and session name
   findWith:"Email,Username",//finds user with data
   authWith:"Password",//authenticates user with data
@@ -409,4 +411,51 @@ static/index.html
     console.info('auth',auth)
   })
 </script>
+```
+# tools
+
+### Signup
+
+```js
+//express mongo signup tool
+const signupTool = require('express-mongo-login').tools.signup
+//make new signup
+const Signup = new signupTool(database.Users,{
+  findWith:"Email",//findWith is the main unique element that will be used to find/get user, required
+  timeout:1000*60*3,//sets time for when key expires defualt is 5 mins
+  keyLength:8,//sets key length, defualt is 12
+  characters:"0123456789"//sets key characters
+})
+//create generate route
+app.post("/signup/generate",async(req,res)=>{
+      //clean input
+      const {Email,Username,Password} = req.body //get data from body
+      //if items arnet strings
+      if(typeof Email!="string"||typeof Username !="string"||typeof Password !="string")
+        return res.json({error:{santax:true}})//send error and return
+      //input is clean, generate key
+      const generated = await Signup.generateKey({Email,Username,Password}) // generateKey with user data, data will be saved untill key expires/timesout
+      //if error while generating key, send error and return
+      if(generated.error)
+        return res.json(generated)
+      //generated.success is signup key, send to user using third party application
+      const Key = generated.success
+      //send success
+      res.json({success:true})
+})
+//create confrim rout
+app.post("/signup/confirm",async(req,res)=>{
+  //clean input
+  const {Email,Key} = req.body // get email and key from req.body
+  if(typeof Email!="string"||typeof Key !="string")//check that email and key are strings
+    return res.json({error:{santax:true}})//if input not clean return and send error
+  //confirm key with Email and sent Key
+  const response = Signup.confirmKey(Email,Key)
+  //check if error confirming key
+  if(response.error)return res.json({error:response.error})//return and send error
+  //no errors, key correct, create user with data from response.success, also add defualts ect...
+  await database.Users.create({...response.success})
+  //send success
+  res.json({success:true})
+})
 ```
