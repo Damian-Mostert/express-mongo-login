@@ -13,8 +13,10 @@ a easy and secure way to manage your user data with express and mongoose.
 ```js
                                       //database model
 app.use(expressMongoLogin(userModel,{
+  maxDevices:null,//sets max allowed active devices, null will mean infinit devices
   maxUsers:null,//0,null or undefined for infinite users, number bigger than 0 to define max users
   cookieName:"Users",//required, sets cookie and session name
+  authenticationMode:'strict',//strict ot null will compleatly log out all users on device if one fails to authentocate, anything else will enable lose mode, lose node will just logout one user if it failes to authenticate, lose recomended if maxDevices togeled
   findWith:"Email,Username",//finds user with data
   authWith:"Password",//authenticates user with data
   authTimeout:1000*60*60*12,//12 hrs timout, this timeout is for auth tokens, if set to null auth tokens wont flush
@@ -29,6 +31,7 @@ app.use(expressMongoLogin(userModel,{
 ### with socket.io
 ```js
 const userRout = expressMongoLogin(userModel,{
+  maxDevices:1,//sets max allowed active devices, user will be kicked of another device if more than 1
   maxUsers:5,//max users set to 5, no more than 5 users will be allowed to login
   cookieName:"Users",//required, sets cookie and session name
   findWith:"Email,Username",//finds user with data
@@ -95,6 +98,7 @@ let LoginAuth = await res.mongo["your cookie name"].login({
 if(LoginAuth.error)
   //handle error
 else if(LoginAuth.success){
+  //LoginAuth.success.index can be used to set the new user index
   //handle login success will only return true or null,
   //use authenticate to get user data
 }

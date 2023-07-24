@@ -1,10 +1,3 @@
-/*
-Built by Damian Mostert
-Contact Details
-Email: damianmostert86@gmail.com
-Phone: +27 74 433 5251
-I need a job :(
-*/
 //includes
 const express = require("express"); // for router
 const mongoose = require("mongoose"); // to confirm that objects are mongoose models
@@ -12,15 +5,29 @@ const CryptoJS = require("crypto-js"); // to enctypt and decrypt data
 const Session = require("express-session") // for router session
 const cookieParser = require("cookie-parser") // for router cookies
 //function to generate random strings
-var generateString = require('./generateString.js')
+function generateString(
+  length = 8,//defualt length
+  characters='ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789'//defualt characters
+) {
+  //set result variabal
+  let result = ''
+  //set i = 0,while i smaller than length, increese i
+  for ( let i = 0; i < length; i++ )
+    //add a random character to result
+    result += characters.charAt(Math.floor(Math.random() * characters.length))
+    //add random character to result
+  return result;
+}
 //function to encrypt JSON
 function encryptJSON(message,key){
   try{
     //try decrypt
-    return (CryptoJS.AES.encrypt(JSON.stringify(message),key)).toString();
+    return (CryptoJS.AES.encrypt(JSON.stringify(message),key)).toString()
+
   }catch(e){
     //if failed return null
     return null
+
   }
 }
 //function to decrypt JSON
@@ -28,46 +35,47 @@ function dectriptJSON(data,key){
   try{
     //try decrypt
     return JSON.parse((CryptoJS.AES.decrypt(data, key)).toString(CryptoJS.enc.Utf8))
+
   }catch(e){
     //if failed return null
     return null
+
   }
 }
 //express mongo login error
 const e_errors = []
-const e = message => {
-  e_errors.push(new Error("\033[91mexpress-mongo-login\033[0m "+message))
+//function for errors
+function e(){
+  e_errors.push(new Error("\033[91mexpress-mongo-login\033[0m ",...arguments))
 }
-const inf = message => {
-  console.info("\033[1;36mexpress-mongo-login\033[0m \033[1;33minfo\033[0;0m "+message)
+//for printing info
+function inf(){
+  console.info("\033[1;36mexpress-mongo-login\033[0m \033[1;33mInfo\033[0;0m ",...arguments)
 }
-const w = message => {
-  console.warn("\033[1;36mexpress-mongo-login\033[0m \033[1;33mwarning\033[0;0m "+message)
+//for printing warnings
+function w(){
+  console.warn("\033[1;36mexpress-mongo-login\033[0m \033[1;33mWarning\033[0;0m ",...arguments)
 }
-const throwErrors = (s) =>{
-  for(let error of e_errors)console.error(error)
+//throw errors after erros have added in array
+function throwErrors(){
+  //print each error
+  for(let error of e_errors)
+    console.error(error)
+  //if errors length
   if(e_errors.length){
-    w("cought errors; calling process exit")
+    //tell about proccess exit
+    w("express-mongo-login cought errors; calling process exit.")
+    //exit proccess
     process.exit(0)
   }
 }
-
 //success callback
-const success=success=>{
-  if(success)
-    return {success}
-  return {success:true}
-}
+const success=(success=true)=>{return{success}}
 //error callback
-const error=error=>{
-  if(error)
-    return {error}
-  return {error:true}
-}
-
+const error=(error=true)=>{return{error}}
 //fake token things class
 class fakeTokenThings {
-  constructor(){
+  constructor(maxDevices){
     //fake token storage array
     var storage  = []
     //fake token start length
@@ -105,6 +113,19 @@ class fakeTokenThings {
     }
     //outer function for new token
     this.makeNewToken=(user_id,realToken,timeout)=>{
+      //make count to check if count exceeds max devices
+      var Count = 0
+      //for each in storage
+      for(var i = 0;i<storage.length;i++){
+          //if item id is same as id encreese count
+          if(storage[i].user_id.toString() == user_id.toString())Count++
+          //if count bigger than max allowed deviced
+          if(maxDevices&&(Count >= maxDevices))
+          {
+            this.clearToken(storage[i].fakeToken)
+            Count--
+          }
+      }
       //make new fake token
       const newToken = fakeToken(user_id,realToken)
       //push intoo storage
@@ -266,8 +287,20 @@ function expressMongooseLogin(model={},config={}){
     e("No findWith in config, expected a string")
   if(!config.authWith)//if no auth with throw error
     e("No authWith in config, expected a string")
-  if(!config.authTimeout)//if no find with throw error
-    e("No authTimeout in config, expected a number")
+  if(!config.authTimeout){//if no find with throw error
+    w("No authTimeout in config, setting to defualt 1 day")
+    config.authTimeout=1000*60*60*24
+  }
+  if(!config.authenticationMode){
+    w("No authenticationMode in config, defualt is strict")
+    config.authenticationMode = 'strict'
+  }
+  if(!config.maxUsers)
+    w("No maxUsers in config, defualt is infinit")
+  if(!config.maxDevices)
+    w("No maxDevices in config, defualt is infinit")
+  if(config.maxUsers&&typeof config.maxUsers!="number")//if no cookie name throw error
+    e("maxUsers is not a string")
   if(config.cookieName&&typeof config.cookieName!="string")//if no cookie name throw error
     e("cookieName is not a string")
   if(config.findWith&&typeof config.findWith!="string")//if no find with string throw error
@@ -288,24 +321,39 @@ function expressMongooseLogin(model={},config={}){
   if(!config.lockon)//if no auth with string throw error
     w("no lockon settings in config; user acounts will not be locked out for timeout if auth input was incorect.")
   //lockon errors
-  if(config.lockon&&typeof config.lockon != "object")e("config.lockon was not a object")
+  if(config.lockon&&typeof config.lockon != "object")
+  e("config.lockon was not a object")
   throwErrors(' ')
   for(let i in config.lockon){
-    if(!i.match(/\d+/))e("lockon expects only numbers to indicate when a action must take place")
-  if(typeof config.lockon[i]!="object")e("lockon['"+i+"'] was expecting a object")
-  else {
-    if((!config.lockon[i].timeout)||(typeof config.lockon[i].timeout !="number"))e("lockon['"+i+"'].timeout is not a number")
-    if((config.lockon[i].callback)&&(typeof config.lockon[i].callback!="function"))w("lockon['"+i+"'].callback is not a function; you would mabey like to use callback to warn users via email or phone")
-  }
+    if(!i.match(/\d+/))
+      e("lockon expects only numbers to indicate when a action must take place")
+    if(typeof config.lockon[i]!="object")
+      config.lockon[i] = {}
+    if((typeof config.lockon[i].timeout != 'number')||(typeof config.lockon[i].timeout != 'boolean'))
+      w("lockon['"+i+"'].timeout was expected a boolean or number")
+    if((!config.lockon[i].timeout)){
+      w("lockon['"+i+"'].timeout not set, set to defualt 5 minuts")
+      config.lockon[i].timeout = 1000*60*5
+    }
+    if((config.lockon[i].callback)&&(typeof config.lockon[i].callback!="function"))
+      w("lockon['"+i+"'].callback is not a function; you would mabey like to use callback to warn users via email or phone")
   }
   if(config.otp){
-    if(typeof config.otp == "object"){
-      if(!config.otp.characters)config.otp.characters = '0123456789qwertyuiopasdfghjklzxcvbnmQWERTYUIOPASDFGHJKLZXCVBNM'
-      if(config.otp.characters)if(typeof config.otp.characters != "string")e("otp.characters in config is not a string")
-      if(typeof config.otp.length != "number")e("otp.length in config is not a number")
-      if(typeof config.otp.timeout != "number")e("otp.timeout in config is not a number")
-      if(((typeof config.otp.callback!="function")))e("otp.callback in config is not a funtion")
-    }else e("otp in config is not a object")
+    if(typeof config.otp!='object')config.otp = {}
+    if(!config.otp.characters){
+      w("no otp.characters in config, characters set defualt")
+      config.otp.characters = '0123456789qwertyuiopasdfghjklzxcvbnmQWERTYUIOPASDFGHJKLZXCVBNM'
+    }
+    if(!config.otp.length){
+      w("config.otp.length is 0 or null, length now set to defualt 12")
+      config.otp.length = 12
+    }
+    if(typeof config.otp.timeout != "number"){
+      w("otp.timeout in config not set as number, now set to defualt 5 minuts")
+      config.otp.timeout = 1000*60*5
+    }
+    if(((typeof config.otp.callback!="function")))
+      w("otp.callback in config is not a funtion, you might want to use callback to warn user with third party application")
   }
   throwErrors(' ')
   //make auth arrays
@@ -333,7 +381,7 @@ function expressMongooseLogin(model={},config={}){
       w("posible authentication problem with '"+a+"' in authWith. in model '"+model.collection.collectionName+"' '"+a+"' is not a string; authentication will fail as express-mongo-login can only compaires strings")
 
   //make private fakeTokenThings
-  const fakeTokens = new fakeTokenThings
+  const fakeTokens = new fakeTokenThings(config.maxDevices)
   //make private onLockStorage
   const LockStorage = new onLockStorage(config.lockon)
   //make private otpStorage
@@ -348,9 +396,6 @@ function expressMongooseLogin(model={},config={}){
   .use(Session(config.Session))
   //real rout
   .use(async function(request,response={},next){
-    //create false next if no next
-    if(typeof next!="function")e("expected next to be funtion, but instead got '"+typeof next+"'")
-    //make stored cookie array
     const storedCookies = {}
     //setCookie function
     response.setCookie=function setCookie(name,data,config){
@@ -379,6 +424,25 @@ function expressMongooseLogin(model={},config={}){
       response.setCookie("Users",null,config.cookie)
       request.session[config.cookieName+"_session"]=null
       return error({auth:true})
+    }
+    //function to logout without authentication
+    function logoutNoAuthNoErrOrTks(x){
+      //get session
+      var session = request.session[config.cookieName+"_session"]
+      //get cookue
+      var cookie = request.cookies[config.cookieName]
+      //if x in session index
+      if(session&&(session.length>x)){
+          request.session[config.cookieName+"_session"].splice(x, 1);
+      }else if(cookie){
+        if(session)x -= session.length
+        if(fakeTokens.clearToken(cookie[x].fakeToken).success){
+          //splice cookie at index
+          cookie.splice(x,1)
+          //if session and cookies empty clear cookies
+          response.setCookie(config.cookieName,cookie,config.cookie)
+        }
+      }
     }
     //function to logout without authentication
     function logoutNoAuth(x){
@@ -418,48 +482,57 @@ function expressMongooseLogin(model={},config={}){
     }
     //function to authenticate
     async function authenticate(){
-      //if cookies or session exists
-      if(request.cookies[config.cookieName]&&request.session[config.cookieName+"_session"]){
-        //try
-        try{
-          //push session and cookies in one array
-          const data = [...request.session[config.cookieName+"_session"],...request.cookies[config.cookieName]]
-          //make array variabal for return
-          const built = []
-          //for each item in data
-          for(let item in data)
-            //if data has fakeToken and encrypted
-            if(data[item]&&data[item].fakeToken&&data[item].encrypted){
-              //get real token data
-              const realTokenData = fakeTokens.getToken(data[item].fakeToken)
-              //if no realTokenData return clear session and cookie
-              if(!realTokenData)
-                return clearThisCookie()
-              //decryptJSON
-              const decrypted = dectriptJSON(data[item].encrypted,realTokenData.realToken)
-              //if token has timeout reset it
-              if(realTokenData.timeout)
+        //if cookies or session exists
+        if(request.cookies[config.cookieName]&&request.session[config.cookieName+"_session"]){
+          //try
+          try{
+            //push session and cookies in one array
+            const data = [...request.session[config.cookieName+"_session"],...request.cookies[config.cookieName]]
+            //make array variabal for return
+            const built = []
+            //for each item in data
+            var x = 0
+            for(let item in data){
+              //if data has fakeToken and encrypted
+              if(data[item]&&data[item].fakeToken&&data[item].encrypted){
+                //get real token data
+                const realTokenData = fakeTokens.getToken(data[item].fakeToken)
+                //if no realTokenData return clear session and cookie
+                if(!realTokenData)
+                  if(config.authenticationMode == 'strict')
+                    return clearThisCookie()
+                  else{
+                    await logoutNoAuthNoErrOrTks(x)
+                    x++
+                    continue
+                  }
+                //decryptJSON
+                const decrypted = dectriptJSON(data[item].encrypted,realTokenData.realToken)
+                //if token has timeout reset it
+                if(realTokenData.timeout)
                 fakeTokens.resetTimeout(realTokenData.fakeToken,config.authTimeout)
-              //if decrypted and authtokens match with id,find and push user
-              if(decrypted&&(decrypted.authToken == realTokenData.authToken)&&(decrypted.user_id==realTokenData.user_id))
+                //if decrypted and authtokens match with id,find and push user
+                if(decrypted&&(decrypted.authToken == realTokenData.authToken)&&(decrypted.user_id==realTokenData.user_id))
                 built.push(await model.findById(realTokenData.user_id))
-              else //if failed return clear session and cookie
+                else //if failed return clear session and cookie
                 return clearThisCookie()
-            }else{ // return santax error
-              clearThisCookie()
-              return error({santax:true})
+              }else{ // return santax error
+                clearThisCookie()
+                return error({santax:true})
+              }
+              x++
             }
             //if not built return and ckear session and cookue
             if(!built.length)
-              return clearThisCookie()
+            return clearThisCookie()
             //success, no errors return users
             return success(built)
-        }catch(e){
-          //some error happend, clear cookie and session
-          return clearThisCookie()
-        }
-      }else //return no cookie error
-        return error({cookie:true})
+          }catch(e){
+            //some error happend, clear cookie and session
+            return clearThisCookie()
+          }
+        }else //return no cookie error
+          return error({cookie:true})
     }
     //generate otp for login function
     async function generateOTP(input={},loginConfig={}){
@@ -544,8 +617,11 @@ function expressMongooseLogin(model={},config={}){
       //auth to check for other users
       const auth = await authenticate()
       if(auth.error)clearThisCookie()
-      if(config.maxUsers&&auth.success&&config.maxUsers == auth.success.length)return error({maxUsers:true})
+      //if config maxusers check max users
+      if(config.maxUsers&&auth.success&&config.maxUsers == auth.success.length)
+        return error({maxUsers:true})//to many users return error
       //for each in authWith array
+      var index
       for(let i of authWithArray)
       //if user password match input password
       if(user[i] === input[i]){//if items match
@@ -559,16 +635,18 @@ function expressMongooseLogin(model={},config={}){
         //if no session build session
         if(!request.session[config.cookieName+"_session"])request.session[config.cookieName+"_session"]=[]
         //if remember
-        if(loginConfig.remember)
+        if(loginConfig.remember){
           response.setCookie(config.cookieName,[...request.cookies[config.cookieName],new newCookie()],config.cookie)
-        else
+          index = request.session[config.cookieName+"_session"].length + request.cookies[config.cookieName].length
+        }else{
           request.session[config.cookieName+"_session"] = [...request.session[config.cookieName+"_session"],new newCookie()]
-        //clear lock on status
-        if(config.lockon&&!loginConfig.dontLockon){
-          LockStorage.clearFailStatus(user._id)
+          index = request.session[config.cookieName+"_session"].length
         }
+        //clear lock on status
+        if(config.lockon&&!loginConfig.dontLockon)
+          LockStorage.clearFailStatus(user._id)
         //no erros return success
-        return success()
+        return success({index:index-1})
       }
       //increase lockon status
       if(config.lockon&&!loginConfig.dontLockon){
@@ -666,7 +744,6 @@ function expressMongooseLogin(model={},config={}){
     else
       //if mongo exists just add cookie
       request.mongo[config.cookieName] =  {authenticate} // req authenticate
-
     //response
     //if mongo is not part of response create mongoResponse class
     if(!response.mongo)response.mongo = new class mongoResponse{
@@ -681,7 +758,7 @@ function expressMongooseLogin(model={},config={}){
       //if mongo exists just add cookie
       response.mongo[config.cookieName] =  {login,logout,logoutAll,reAuthenticate} //res login , logout, logoutAll, logoutNoAuth, reAuthenticate
     //continue
-    next()
+    if(typeof next == 'function')next()
   })
   //create a rout for socket.io to use req.authenticate
   rout.io = () =>{
@@ -689,7 +766,91 @@ function expressMongooseLogin(model={},config={}){
       return await rout.handle(socket.request,{},next)
     }
   }
+  rout.config = config
   //return rout
   return rout
 }
-module.exports.tools = require('./tools.js')
+//create tools
+module.exports.tools = {
+  //signup helper tool
+  signup:class signupTool{
+    //main generateKey
+    async generateKey(User){
+      //if user doesnt contain findWith
+      if(!User?.[this.findWith])
+        return error({santax:true})
+      //create input
+      var inp = {}
+      //make input findWith users findWith
+      inp[this.findWith] = User?.[this.findWith]
+      //check for duplicates
+      if(await this.model.findOne(inp))
+        return error({user:true})//return eror, duplicate exists
+      //make new secret key  key
+      var newKeySecret = generateString(this.maxKeyLength,this.allowedCharacters)
+      // make key token wirh secret and user
+      var newKey = this.newConfirmationKey(newKeySecret,User)
+      //add timeout to key
+      newKey.timeout = setTimeout(()=>{
+        //timeout clears user
+        this.clearConfirmKey(User[this.findWith])
+      },this.timeout)
+      //push newKey into confirm keys
+      this.ConfirmationKeys.push(newKey)
+      return success({newKeySecret:true})
+    }
+    //main confirmKey
+    confirmKey(findWith,Key){
+      //get posible key
+      var posibleKey = this.getConfirmKey(findWith)
+      //if key contains subkey, and subkey is same as input key
+      if(posibleKey?.Key == Key){
+        //clear posible timeout
+        clearTimeout(posibleKey.timeout)
+        //return success and clearKey
+        return success(this.clearConfirmKey(findWith))
+      }
+      else return error()
+    }
+    constructor(Model,Config={}){
+      //if no find with error
+      if(typeof Config.findWith!='string')
+        e('signup tool requires authWith, and authWith must be string')
+      //if no model error
+      if(!Model)
+        e('no mongoose model in signup')
+      throwErrors()
+      if(!Config.keyLength)
+        w('no keyLength found in signup config, keyLength set to defualt 12')
+      if(!Config.timeout)
+        w('no timeout set in signup, defualt set to 5 minuts')
+      //set basics
+      this.model = Model
+      this.timeout = Config.timeout||(1000*60*5)
+      this.findWith = Config.findWith.split(',')
+      this.maxKeyLength = Config.keyLength||12
+      this.allowedCharacters = Config.characters
+      this.ConfirmationKeys = []
+      //function for new key
+      this.newConfirmationKey = function newConfirmationKey(Key,User){
+        for(let i in this.ConfirmationKeys)//for each key
+          for(let findWith of Config.findWith)
+          if(this.ConfirmationKeys[i].User[findWith] == User[findWith]) //if match with findWith
+            this.clearConfirmKey(User[findWith])//clear old key
+        return {Key,User}//return data
+      }
+      //funtion to clear key
+      this.clearConfirmKey = function clearConfirmKey(findWith){
+        for(let i in this.ConfirmationKeys)//for each key
+          if(this.ConfirmationKeys[i].User[Config.findWith] == findWith) //if match with findWith
+            return this.ConfirmationKeys.splice(i,1)[0].User//splice and return item user
+      }
+      //funtion to get key
+      this.getConfirmKey = function getConfirmKey(findWith){
+        for(let i in this.ConfirmationKeys)//for each key
+          if(this.ConfirmationKeys[i].User[Config.findWith] == findWith) //if match with findWith
+            return this.ConfirmationKeys[i] //return confirmKey
+      }
+    }
+  }
+}
